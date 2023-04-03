@@ -61,7 +61,7 @@ pub struct Production<N, L> {
 
 impl<N, L> Production<N, L> {
     /// Creates a new Production.
-    pub(crate) fn new(symbol: N, expression: Vec<ExprSymbol<N, L>>) -> Self {
+    pub fn new(symbol: N, expression: Vec<ExprSymbol<N, L>>) -> Self {
         Self { symbol, expression }
     }
 }
