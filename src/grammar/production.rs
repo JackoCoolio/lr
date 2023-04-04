@@ -54,14 +54,27 @@ macro_rules! nonterm {
 /// A single production in the grammar.
 /// `X -> epsilon` is represented by a `Production` with an empty `expression`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Production<N, L> {
-    pub(crate) symbol: N,
-    pub(crate) expression: Vec<ExprSymbol<N, L>>,
+pub struct Production<Nonterm, Terminal, AstNode, Action> {
+    pub(crate) symbol: Nonterm,
+    pub(crate) expression: Vec<ExprSymbol<Nonterm, Terminal>>,
+    pub(crate) action: Action,
 }
 
-impl<N, L> Production<N, L> {
+impl<N, T, A, Action> Production<N, T, A, Action>
+where
+    Action: Fn(Vec<A>) -> A,
+{
     /// Creates a new Production.
-    pub fn new(symbol: N, expression: Vec<ExprSymbol<N, L>>) -> Self {
-        Self { symbol, expression }
+    pub fn new(symbol: N, expression: Vec<ExprSymbol<N, T>>, action: Action) -> Self {
+        Self {
+            symbol,
+            expression,
+            action,
+        }
+    }
+
+    /// Runs this Production's semantic action on a list of AST nodes.
+    pub fn action(&self, nodes: Vec<A>) -> A {
+        self.action.call(nodes)
     }
 }

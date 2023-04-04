@@ -234,7 +234,7 @@ where
                                 _ => unreachable!(),
                             }
                         }
-                        println!("ACTION[{i}, {term:?}] = {}", Action::Shift(j));
+                        // println!("ACTION[{i}, {term:?}] = {}", Action::Shift(j));
                     }
                     Some(symbol @ ExprSymbol::Nonterminal(nonterm)) => {
                         let goto_state = self.goto(state, symbol);
@@ -254,7 +254,7 @@ where
                         if action.insert((i, L::eof()), Action::Accept).is_some() {
                             panic!("unknown error");
                         }
-                        println!("ACTION[{i}, $] = acc");
+                        // println!("ACTION[{i}, $] = acc");
                     }
                     None => {
                         // (b)
@@ -269,10 +269,12 @@ where
                                 _ => unreachable!(),
                             }
                         }
+                        /*
                         println!(
                             "ACTION[{i}, {lookahead:?}] = {}",
                             Action::Reduce(position.production())
                         );
+                        */
                     }
                 }
             }
@@ -286,13 +288,15 @@ where
         string: I,
     ) -> Result<(), ParseError<Token>>
     where
+        Token: Debug + Clone,
         L: Language,
     {
         // this method uses unwrap() heavily, but each use is based on prior assumptions
         // in other words, if we panic, it's because we did something very wrong, not the user
 
         // start with initial state, state 0
-        let mut stack = vec![0];
+        let mut stack: Vec<usize> = vec![0];
+        let mut val_stack = Vec::new();
 
         let (action_table, goto_table) = self.get_tables()?;
 
@@ -313,6 +317,7 @@ where
             match action {
                 Action::Accept => break,
                 Action::Shift(j) => {
+                    val_stack.push(a.clone());
                     stack.push(*j);
                     a = match string.next() {
                         None => return Err(ParseError::UnterminatedInput),
@@ -323,6 +328,11 @@ where
                     let Production { symbol, expression } =
                         // panicking here means implementation error
                         self.grammar.get_production(*j).unwrap();
+
+                    println!("Reduce to production {j} with val stack:");
+                    for val in val_stack.iter().rev() {
+                        println!("-\t{val:?}");
+                    }
 
                     // not sure if this is very fast
                     stack.drain(stack.len() - expression.len()..);
@@ -400,7 +410,7 @@ mod test {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct Token {
         kind: Term,
     }

@@ -9,16 +9,16 @@ use self::production::{ExprSymbol, Production};
 pub(crate) mod position;
 pub mod production;
 
-pub struct Grammar<N, L> {
-    pub(crate) productions: Vec<Production<N, L>>,
+pub struct Grammar<N, L, A, Action> {
+    pub(crate) productions: Vec<Production<N, L, A, Action>>,
 }
 
-pub struct GrammarBuilder<N, L> {
-    start_productions: Vec<Production<N, L>>,
-    nonstart_productions: Vec<Production<N, L>>,
+pub struct GrammarBuilder<N, L, A, Action> {
+    start_productions: Vec<Production<N, L, A, Action>>,
+    nonstart_productions: Vec<Production<N, L, A, Action>>,
 }
 
-impl<N, L> Default for GrammarBuilder<N, L> {
+impl<N, L, A, Action> Default for GrammarBuilder<N, L, A, Action> {
     fn default() -> Self {
         Self {
             start_productions: Vec::new(),
@@ -37,17 +37,17 @@ pub enum GrammarBuilderError {
     MiscategorizedStartNonterminal,
 }
 
-impl<N, L> GrammarBuilder<N, L> {
+impl<N, L, A, Action> GrammarBuilder<N, L, A, Action> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn add_start_production(&mut self, production: Production<N, L>) -> &mut Self {
+    pub fn add_start_production(&mut self, production: Production<N, L, A, Action>) -> &mut Self {
         self.start_productions.push(production);
         self
     }
 
-    pub fn add_start_productions<I: IntoIterator<Item = Production<N, L>>>(
+    pub fn add_start_productions<I: IntoIterator<Item = Production<N, L, A, Action>>>(
         &mut self,
         productions: I,
     ) -> &mut Self {
@@ -55,12 +55,15 @@ impl<N, L> GrammarBuilder<N, L> {
         self
     }
 
-    pub fn add_nonstart_production(&mut self, production: Production<N, L>) -> &mut Self {
+    pub fn add_nonstart_production(
+        &mut self,
+        production: Production<N, L, A, Action>,
+    ) -> &mut Self {
         self.nonstart_productions.push(production);
         self
     }
 
-    pub fn add_nonstart_productions<I: IntoIterator<Item = Production<N, L>>>(
+    pub fn add_nonstart_productions<I: IntoIterator<Item = Production<N, L, A, Action>>>(
         &mut self,
         productions: I,
     ) -> &mut Self {
@@ -71,7 +74,7 @@ impl<N, L> GrammarBuilder<N, L> {
     // TODO: join start and nonstart productions and just have an Option<N> field for the start
     // nonterminal
 
-    pub fn build(self) -> Result<Grammar<N, L>, GrammarBuilderError>
+    pub fn build(self) -> Result<Grammar<N, L, A, Action>, GrammarBuilderError>
     where
         N: Clone + Eq + Hash + Nonterminal,
     {
@@ -92,7 +95,11 @@ impl<N, L> GrammarBuilder<N, L> {
             return Err(GrammarBuilderError::MismatchedStartNonterminals);
         }
 
-        let augment = Production::new(N::start(), vec![nonterm!(start_nonterminal.clone())]);
+        let augment = Production::<N, L, A, Action>::new(
+            N::start(),
+            vec![nonterm!(start_nonterminal.clone())],
+            |nodes| nodes.first().unwrap(),
+        );
 
         for production in self.nonstart_productions.iter() {
             if &production.symbol == start_nonterminal {
