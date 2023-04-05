@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     grammar::{
         position::Position,
-        production::{ExprSymbol, Production},
+        production::{GrammarSymbol, Production},
         Grammar,
     },
     lang::Language,
@@ -70,7 +70,7 @@ where
 
                 let locus = production.expression.get(position.expression());
 
-                let Some(ExprSymbol::Nonterminal(nonterm)) = locus else {
+                let Some(GrammarSymbol::Nonterminal(nonterm)) = locus else {
                     // skip terminals and end positions
                     continue;
                 };
@@ -103,7 +103,7 @@ where
     }
 
     // Computes GOTO(I, X) for the given item set and grammar symbol.
-    fn goto(&self, item_set: &ItemSet<L>, symbol: &ExprSymbol<N, L>) -> ItemSet<L> {
+    fn goto(&self, item_set: &ItemSet<L>, symbol: &GrammarSymbol<N, L>) -> ItemSet<L> {
         // println!("goto({:#?}, {:?})", item_set, symbol);
         let mut goto = ItemSet::new();
 
@@ -216,7 +216,7 @@ where
             for Item(position, lookahead) in state.items() {
                 let locus = self.grammar.get_locus(position);
                 match locus {
-                    Some(symbol @ ExprSymbol::Terminal(term)) => {
+                    Some(symbol @ GrammarSymbol::Terminal(term)) => {
                         // (a)
                         // we shouldn't have to build goto every time. cache somehow?
                         let goto_state = self.goto(state, symbol);
@@ -237,7 +237,7 @@ where
                         }
                         // println!("ACTION[{i}, {term:?}] = {}", Action::Shift(j));
                     }
-                    Some(symbol @ ExprSymbol::Nonterminal(nonterm)) => {
+                    Some(symbol @ GrammarSymbol::Nonterminal(nonterm)) => {
                         let goto_state = self.goto(state, symbol);
 
                         let Some(j) = states.iter().position(|state| state == &goto_state) else {

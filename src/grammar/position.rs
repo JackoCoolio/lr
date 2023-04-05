@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use super::{production::ExprSymbol, Grammar};
+use super::{production::GrammarSymbol, Grammar};
 
 /// A position that the parser could be at during the parsing process.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -116,12 +116,12 @@ where
 }
 
 impl<N, L, A> Grammar<N, L, A> {
-    fn get_nth_symbol(&self, pos: &Position, n: usize) -> Option<&ExprSymbol<N, L>> {
+    fn get_nth_symbol(&self, pos: &Position, n: usize) -> Option<&GrammarSymbol<N, L>> {
         let expr = &self.productions[pos.production].expression;
         expr.get(pos.expression + n)
     }
 
-    pub(crate) fn get_locus(&self, pos: &Position) -> Option<&ExprSymbol<N, L>> {
+    pub(crate) fn get_locus(&self, pos: &Position) -> Option<&GrammarSymbol<N, L>> {
         self.get_nth_symbol(pos, 0)
     }
 }

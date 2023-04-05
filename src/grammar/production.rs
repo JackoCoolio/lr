@@ -4,12 +4,12 @@ use std::fmt::{Debug, Display};
 /// Either a `Nonterminal` or a `Terminal`.
 /// `N` is the type of the nonterminal and `L` is the type of the terminal.
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub enum ExprSymbol<N, L> {
+pub enum GrammarSymbol<N, L> {
     Nonterminal(N),
     Terminal(L),
 }
 
-impl<N, L> Debug for ExprSymbol<N, L>
+impl<N, L> Debug for GrammarSymbol<N, L>
 where
     N: Debug,
     L: Debug,
@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<N, L> Display for ExprSymbol<N, L>
+impl<N, L> Display for GrammarSymbol<N, L>
 where
     N: Display,
     L: Display,
@@ -39,7 +39,7 @@ where
 #[macro_export]
 macro_rules! term {
     ($x:expr) => {
-        $crate::grammar::production::ExprSymbol::Terminal($x)
+        $crate::grammar::production::GrammarSymbol::Terminal($x)
     };
 }
 
@@ -47,7 +47,7 @@ macro_rules! term {
 #[macro_export]
 macro_rules! nonterm {
     ($x:expr) => {
-        $crate::grammar::production::ExprSymbol::Nonterminal($x)
+        $crate::grammar::production::GrammarSymbol::Nonterminal($x)
     };
 }
 
@@ -56,14 +56,14 @@ macro_rules! nonterm {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Production<N, L, A> {
     pub(crate) symbol: N,
-    pub(crate) expression: Vec<ExprSymbol<N, L>>,
+    pub(crate) expression: Vec<GrammarSymbol<N, L>>,
     pub(crate) action: fn(Vec<A>) -> A,
 }
 
 impl<N, T, A> Production<N, T, A> {
     /// Creates a new Production with an action that takes the node at the top of the stack and
     /// returns it.
-    pub fn new_passthrough(symbol: N, expression: Vec<ExprSymbol<N, T>>) -> Self
+    pub fn new_passthrough(symbol: N, expression: Vec<GrammarSymbol<N, T>>) -> Self
     where
         A: Clone,
     {
@@ -75,7 +75,7 @@ impl<N, T, A> Production<N, T, A> {
     }
 
     /// Creates a new Production with the given action.
-    pub fn new(symbol: N, expression: Vec<ExprSymbol<N, T>>, action: fn(Vec<A>) -> A) -> Self {
+    pub fn new(symbol: N, expression: Vec<GrammarSymbol<N, T>>, action: fn(Vec<A>) -> A) -> Self {
         Self {
             symbol,
             expression,

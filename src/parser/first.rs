@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{grammar::production::ExprSymbol, lang::EpsilonSet};
+use crate::{grammar::production::GrammarSymbol, lang::EpsilonSet};
 
 use super::Parser;
 
@@ -16,7 +16,7 @@ where
     /// nonterminal. Otherwise it doesn't need to.
     pub(crate) fn first_of_string(
         &self,
-        sequence: &[ExprSymbol<N, L>],
+        sequence: &[GrammarSymbol<N, L>],
         lookahead: Option<&L>,
     ) -> EpsilonSet<L>
     where
@@ -35,14 +35,14 @@ where
                 set
             }
             // FIRST of string that starts with terminal is just the terminal
-            [ExprSymbol::Terminal(term), ..] => {
+            [GrammarSymbol::Terminal(term), ..] => {
                 set.set_mut().insert(term.clone());
                 set
             }
             // FIRST of string that starts with a nonterminal is the FIRST of that nonterminal
             // if the FIRST of that nonterminal contains epsilon, add the FIRST of the rest of the
             // string as well
-            [ExprSymbol::Nonterminal(nonterm), rest @ ..] => {
+            [GrammarSymbol::Nonterminal(nonterm), rest @ ..] => {
                 let first = self.get_first().get(nonterm).unwrap();
                 set.set_mut().extend(first.as_ref().iter().cloned());
                 if !first.has_epsilon() {
@@ -85,7 +85,7 @@ where
 
                 for expr_symbol in prod.expression.iter() {
                     match expr_symbol {
-                        ExprSymbol::Terminal(expr_term) => {
+                        GrammarSymbol::Terminal(expr_term) => {
                             // don't include epsilon, because this expression derives a terminal
                             include_epsilon = false;
 
@@ -104,7 +104,7 @@ where
                             // don't traverse farther because this symbol can't derive epsilon
                             break;
                         }
-                        ExprSymbol::Nonterminal(expr_nonterm) => {
+                        GrammarSymbol::Nonterminal(expr_nonterm) => {
                             // have to clone to please borrow checker
                             let first = table.get(expr_nonterm).unwrap().clone();
 

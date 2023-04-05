@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{lang::Nonterminal, nonterm};
 
-use self::production::{ExprSymbol, Production};
+use self::production::{GrammarSymbol, Production};
 
 pub(crate) mod position;
 pub mod production;
@@ -147,11 +147,11 @@ where
     L: Debug + Clone + Hash + Eq,
 {
     /// Returns a set of all the grammar symbols in the grammar.
-    pub(crate) fn get_symbols(&self) -> HashSet<ExprSymbol<N, L>> {
+    pub(crate) fn get_symbols(&self) -> HashSet<GrammarSymbol<N, L>> {
         let mut symbols = HashSet::new();
 
         for production in self.productions.iter() {
-            symbols.insert(ExprSymbol::Nonterminal(production.symbol.clone()));
+            symbols.insert(GrammarSymbol::Nonterminal(production.symbol.clone()));
             for symbol in production.expression.iter() {
                 symbols.insert(symbol.clone());
             }
