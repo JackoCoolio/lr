@@ -71,10 +71,10 @@ impl Position {
 }
 
 impl Position {
-    pub(crate) fn with_grammar<'a, N, L>(
+    pub(crate) fn with_grammar<'a, N, L, A>(
         &'a self,
-        grammar: &'a Grammar<N, L>,
-    ) -> PositionWithGrammar<'a, N, L> {
+        grammar: &'a Grammar<N, L, A>,
+    ) -> PositionWithGrammar<'a, N, L, A> {
         PositionWithGrammar {
             position: self,
             grammar,
@@ -82,12 +82,12 @@ impl Position {
     }
 }
 
-pub(crate) struct PositionWithGrammar<'a, N, L> {
+pub(crate) struct PositionWithGrammar<'a, N, L, A> {
     position: &'a Position,
-    grammar: &'a Grammar<N, L>,
+    grammar: &'a Grammar<N, L, A>,
 }
 
-impl<N, L> Display for PositionWithGrammar<'_, N, L>
+impl<N, L, A> Display for PositionWithGrammar<'_, N, L, A>
 where
     N: Debug,
     L: Debug,
@@ -115,7 +115,7 @@ where
     }
 }
 
-impl<N, L> Grammar<N, L> {
+impl<N, L, A> Grammar<N, L, A> {
     fn get_nth_symbol(&self, pos: &Position, n: usize) -> Option<&ExprSymbol<N, L>> {
         let expr = &self.productions[pos.production].expression;
         expr.get(pos.expression + n)

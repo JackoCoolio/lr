@@ -24,15 +24,15 @@ pub mod first;
 type ActionTable<L> = HashMap<(usize, L), Action>;
 type GotoTable<N> = HashMap<(usize, N), usize>;
 
-pub struct Parser<N, L> {
-    grammar: Grammar<N, L>,
+pub struct Parser<N, L, A> {
+    grammar: Grammar<N, L, A>,
     first: OnceCell<FirstTable<N, L>>,
     states: OnceCell<Vec<ItemSet<L>>>,
     tables: OnceCell<(ActionTable<L>, GotoTable<N>)>,
 }
 
-impl<N, L> Parser<N, L> {
-    pub fn new(grammar: Grammar<N, L>) -> Self {
+impl<N, L, A> Parser<N, L, A> {
+    pub fn new(grammar: Grammar<N, L, A>) -> Self {
         Parser {
             grammar,
             first: OnceCell::new(),
@@ -42,7 +42,7 @@ impl<N, L> Parser<N, L> {
     }
 }
 
-impl<N, L> Parser<N, L>
+impl<N, L, A> Parser<N, L, A>
 where
     N: Debug + Clone + Hash + Eq,
     L: Debug + Clone + Hash + Eq,
@@ -207,6 +207,7 @@ where
             self.tables.get().is_none(),
             "use get_tables(), the tables for this parser have already been computed"
         );
+
         let mut action: ActionTable<L> = HashMap::new();
         let mut goto: GotoTable<N> = HashMap::new();
 
@@ -234,7 +235,7 @@ where
                                 _ => unreachable!(),
                             }
                         }
-                        println!("ACTION[{i}, {term:?}] = {}", Action::Shift(j));
+                        // println!("ACTION[{i}, {term:?}] = {}", Action::Shift(j));
                     }
                     Some(symbol @ ExprSymbol::Nonterminal(nonterm)) => {
                         let goto_state = self.goto(state, symbol);
@@ -254,7 +255,7 @@ where
                         if action.insert((i, L::eof()), Action::Accept).is_some() {
                             panic!("unknown error");
                         }
-                        println!("ACTION[{i}, $] = acc");
+                        // println!("ACTION[{i}, $] = acc");
                     }
                     None => {
                         // (b)
@@ -269,10 +270,12 @@ where
                                 _ => unreachable!(),
                             }
                         }
+                        /*
                         println!(
                             "ACTION[{i}, {lookahead:?}] = {}",
                             Action::Reduce(position.production())
                         );
+                        */
                     }
                 }
             }
@@ -281,18 +284,22 @@ where
         Ok((action, goto))
     }
 
+    /// Parses the Token stream into an AST of type A.
     pub fn parse<Token: AsRef<L>, I: IntoIterator<Item = Token>>(
         &self,
         string: I,
-    ) -> Result<(), ParseError<Token>>
+    ) -> Result<A, ParseError<Token>>
     where
+        Token: Debug + Clone,
         L: Language,
+        A: Debug + From<Token>,
     {
         // this method uses unwrap() heavily, but each use is based on prior assumptions
         // in other words, if we panic, it's because we did something very wrong, not the user
 
         // start with initial state, state 0
-        let mut stack = vec![0];
+        let mut stack: Vec<usize> = vec![0];
+        let mut val_stack: Vec<A> = Vec::new();
 
         let (action_table, goto_table) = self.get_tables()?;
 
@@ -313,6 +320,7 @@ where
             match action {
                 Action::Accept => break,
                 Action::Shift(j) => {
+                    val_stack.push(A::from(a.clone()));
                     stack.push(*j);
                     a = match string.next() {
                         None => return Err(ParseError::UnterminatedInput),
@@ -320,12 +328,16 @@ where
                     }
                 }
                 Action::Reduce(j) => {
-                    let Production { symbol, expression } =
+                    let Production { symbol, expression, action } =
                         // panicking here means implementation error
                         self.grammar.get_production(*j).unwrap();
 
                     // not sure if this is very fast
                     stack.drain(stack.len() - expression.len()..);
+
+                    let tokens = val_stack.drain(val_stack.len() - expression.len()..);
+                    let new_token = action(tokens.collect());
+                    val_stack.push(new_token);
 
                     let s = stack.last().unwrap();
                     let goto_state = goto_table.get(&(*s, symbol.clone())).unwrap();
@@ -334,7 +346,7 @@ where
             }
         }
 
-        Ok(())
+        Ok(val_stack.pop().unwrap())
     }
 }
 
@@ -400,7 +412,7 @@ mod test {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct Token {
         kind: Term,
     }
@@ -415,6 +427,10 @@ mod test {
         fn from(value: Term) -> Self {
             Self { kind: value }
         }
+    }
+
+    impl From<Token> for () {
+        fn from(_: Token) -> Self {}
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -444,22 +460,25 @@ mod test {
         }
     }
 
-    fn get_test_grammar() -> Grammar<Nonterm, Term> {
+    fn get_test_grammar() -> Grammar<Nonterm, Term, ()> {
         let mut builder = GrammarBuilder::new();
         builder
-            .add_start_production(Production::new(
+            .add_start_production(Production::new_passthrough(
                 Nonterm::S,
                 vec![nonterm!(Nonterm::C), nonterm!(Nonterm::C)],
             ))
-            .add_nonstart_production(Production::new(
+            .add_nonstart_production(Production::new_passthrough(
                 Nonterm::C,
                 vec![term!(Term::c), nonterm!(Nonterm::C)],
             ))
-            .add_nonstart_production(Production::new(Nonterm::C, vec![term!(Term::d)]));
+            .add_nonstart_production(Production::new_passthrough(
+                Nonterm::C,
+                vec![term!(Term::d)],
+            ));
         builder.build().unwrap()
     }
 
-    fn get_test_parser() -> Parser<Nonterm, Term> {
+    fn get_test_parser() -> Parser<Nonterm, Term, ()> {
         Parser::new(get_test_grammar())
     }
 
@@ -468,7 +487,7 @@ mod test {
         let parser = get_test_parser();
 
         parser
-            .parse(
+            .parse::<Token, _>(
                 vec![Term::d, Term::d, Term::eof]
                     .into_iter()
                     .map(Token::from),
@@ -668,10 +687,10 @@ impl<L> ItemSet<L> {
         self.0.iter()
     }
 
-    pub fn with_grammar<'a, N>(
+    pub fn with_grammar<'a, N, A>(
         &'a self,
-        grammar: &'a Grammar<N, L>,
-    ) -> ItemSetWithGrammar<'a, N, L> {
+        grammar: &'a Grammar<N, L, A>,
+    ) -> ItemSetWithGrammar<'a, N, L, A> {
         ItemSetWithGrammar(self, grammar)
     }
 }
@@ -682,9 +701,9 @@ impl<L> Default for ItemSet<L> {
     }
 }
 
-pub struct ItemSetWithGrammar<'a, N, L>(&'a ItemSet<L>, &'a Grammar<N, L>);
+pub struct ItemSetWithGrammar<'a, N, L, A>(&'a ItemSet<L>, &'a Grammar<N, L, A>);
 
-impl<'a, N, L> Display for ItemSetWithGrammar<'a, N, L>
+impl<'a, N, L, A> Display for ItemSetWithGrammar<'a, N, L, A>
 where
     N: Debug,
     L: Debug,

@@ -54,14 +54,32 @@ macro_rules! nonterm {
 /// A single production in the grammar.
 /// `X -> epsilon` is represented by a `Production` with an empty `expression`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Production<N, L> {
+pub struct Production<N, L, A> {
     pub(crate) symbol: N,
     pub(crate) expression: Vec<ExprSymbol<N, L>>,
+    pub(crate) action: fn(Vec<A>) -> A,
 }
 
-impl<N, L> Production<N, L> {
-    /// Creates a new Production.
-    pub fn new(symbol: N, expression: Vec<ExprSymbol<N, L>>) -> Self {
-        Self { symbol, expression }
+impl<N, T, A> Production<N, T, A> {
+    /// Creates a new Production with an action that takes the node at the top of the stack and
+    /// returns it.
+    pub fn new_passthrough(symbol: N, expression: Vec<ExprSymbol<N, T>>) -> Self
+    where
+        A: Clone,
+    {
+        Self {
+            symbol,
+            expression,
+            action: |nodes| nodes.first().unwrap().clone(),
+        }
+    }
+
+    /// Creates a new Production with the given action.
+    pub fn new(symbol: N, expression: Vec<ExprSymbol<N, T>>, action: fn(Vec<A>) -> A) -> Self {
+        Self {
+            symbol,
+            expression,
+            action,
+        }
     }
 }

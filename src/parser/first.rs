@@ -6,7 +6,7 @@ use super::Parser;
 
 pub(super) type FirstTable<N, L> = HashMap<N, EpsilonSet<L>>;
 
-impl<N, L> Parser<N, L>
+impl<N, L, A> Parser<N, L, A>
 where
     N: Debug + Clone + Hash + Eq,
     L: Debug + Clone + Hash + Eq,
@@ -186,15 +186,15 @@ mod test {
         }
     }
 
-    pub(crate) fn get_test_grammar() -> Grammar<Nonterm, Term> {
+    pub(crate) fn get_test_grammar() -> Grammar<Nonterm, Term, ()> {
         let mut builder = GrammarBuilder::new();
         builder
-            .add_start_production(Production::new(
+            .add_start_production(Production::new_passthrough(
                 Nonterm::E,
                 vec![nonterm!(Nonterm::T), nonterm!(Nonterm::Ep)],
             ))
             .add_nonstart_productions(vec![
-                Production::new(
+                Production::new_passthrough(
                     Nonterm::Ep,
                     vec![
                         term!(Term::Plus),
@@ -202,12 +202,12 @@ mod test {
                         nonterm!(Nonterm::Ep),
                     ],
                 ),
-                Production::new(Nonterm::Ep, vec![]),
-                Production::new(
+                Production::new_passthrough(Nonterm::Ep, vec![]),
+                Production::new_passthrough(
                     Nonterm::T,
                     vec![nonterm!(Nonterm::F), nonterm!(Nonterm::Tp)],
                 ),
-                Production::new(
+                Production::new_passthrough(
                     Nonterm::Tp,
                     vec![
                         term!(Term::Times),
@@ -215,8 +215,8 @@ mod test {
                         nonterm!(Nonterm::Tp),
                     ],
                 ),
-                Production::new(Nonterm::Tp, vec![]),
-                Production::new(
+                Production::new_passthrough(Nonterm::Tp, vec![]),
+                Production::new_passthrough(
                     Nonterm::F,
                     vec![
                         term!(Term::LParen),
@@ -224,7 +224,7 @@ mod test {
                         term!(Term::RParen),
                     ],
                 ),
-                Production::new(Nonterm::F, vec![term!(Term::Id)]),
+                Production::new_passthrough(Nonterm::F, vec![term!(Term::Id)]),
             ]);
 
         builder.build().unwrap()

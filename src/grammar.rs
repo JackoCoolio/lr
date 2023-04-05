@@ -9,16 +9,16 @@ use self::production::{ExprSymbol, Production};
 pub(crate) mod position;
 pub mod production;
 
-pub struct Grammar<N, L> {
-    pub(crate) productions: Vec<Production<N, L>>,
+pub struct Grammar<N, L, A> {
+    pub(crate) productions: Vec<Production<N, L, A>>,
 }
 
-pub struct GrammarBuilder<N, L> {
-    start_productions: Vec<Production<N, L>>,
-    nonstart_productions: Vec<Production<N, L>>,
+pub struct GrammarBuilder<N, L, A> {
+    start_productions: Vec<Production<N, L, A>>,
+    nonstart_productions: Vec<Production<N, L, A>>,
 }
 
-impl<N, L> Default for GrammarBuilder<N, L> {
+impl<N, L, A> Default for GrammarBuilder<N, L, A> {
     fn default() -> Self {
         Self {
             start_productions: Vec::new(),
@@ -37,17 +37,17 @@ pub enum GrammarBuilderError {
     MiscategorizedStartNonterminal,
 }
 
-impl<N, L> GrammarBuilder<N, L> {
+impl<N, L, A> GrammarBuilder<N, L, A> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn add_start_production(&mut self, production: Production<N, L>) -> &mut Self {
+    pub fn add_start_production(&mut self, production: Production<N, L, A>) -> &mut Self {
         self.start_productions.push(production);
         self
     }
 
-    pub fn add_start_productions<I: IntoIterator<Item = Production<N, L>>>(
+    pub fn add_start_productions<I: IntoIterator<Item = Production<N, L, A>>>(
         &mut self,
         productions: I,
     ) -> &mut Self {
@@ -55,12 +55,12 @@ impl<N, L> GrammarBuilder<N, L> {
         self
     }
 
-    pub fn add_nonstart_production(&mut self, production: Production<N, L>) -> &mut Self {
+    pub fn add_nonstart_production(&mut self, production: Production<N, L, A>) -> &mut Self {
         self.nonstart_productions.push(production);
         self
     }
 
-    pub fn add_nonstart_productions<I: IntoIterator<Item = Production<N, L>>>(
+    pub fn add_nonstart_productions<I: IntoIterator<Item = Production<N, L, A>>>(
         &mut self,
         productions: I,
     ) -> &mut Self {
@@ -71,9 +71,10 @@ impl<N, L> GrammarBuilder<N, L> {
     // TODO: join start and nonstart productions and just have an Option<N> field for the start
     // nonterminal
 
-    pub fn build(self) -> Result<Grammar<N, L>, GrammarBuilderError>
+    pub fn build(self) -> Result<Grammar<N, L, A>, GrammarBuilderError>
     where
         N: Clone + Eq + Hash + Nonterminal,
+        A: Clone,
     {
         let mut start_nonterminals = HashSet::new();
         for production in self.start_productions.iter() {
@@ -92,7 +93,11 @@ impl<N, L> GrammarBuilder<N, L> {
             return Err(GrammarBuilderError::MismatchedStartNonterminals);
         }
 
-        let augment = Production::new(N::start(), vec![nonterm!(start_nonterminal.clone())]);
+        let augment = Production::<N, L, A>::new(
+            N::start(),
+            vec![nonterm!(start_nonterminal.clone())],
+            |nodes| nodes.first().unwrap().clone(),
+        );
 
         for production in self.nonstart_productions.iter() {
             if &production.symbol == start_nonterminal {
@@ -118,7 +123,7 @@ fn test_grammar_builder() {
         fn start() -> Self {}
     }
 
-    let builder: GrammarBuilder<(), ()> = GrammarBuilder::default();
+    let builder: GrammarBuilder<(), (), ()> = GrammarBuilder::default();
     assert!(
         matches!(
             builder.build(),
@@ -130,13 +135,13 @@ fn test_grammar_builder() {
     // TODO: add test cases for other errors
 }
 
-impl<N, L> Grammar<N, L> {
-    pub(crate) fn get_production(&self, i: usize) -> Option<&Production<N, L>> {
+impl<N, L, A> Grammar<N, L, A> {
+    pub(crate) fn get_production(&self, i: usize) -> Option<&Production<N, L, A>> {
         self.productions.get(i)
     }
 }
 
-impl<N, L> Grammar<N, L>
+impl<N, L, A> Grammar<N, L, A>
 where
     N: Debug + Clone + Hash + Eq,
     L: Debug + Clone + Hash + Eq,
