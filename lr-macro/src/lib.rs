@@ -1,12 +1,13 @@
 #![allow(unused)]
 
-use proc_macro2::{Ident, Literal, Span, TokenStream};
+use proc_macro2::{Literal, Span, TokenStream};
+use proc_macro_error::{abort, emit_error, proc_macro_error};
 use syn::{
     braced,
     parse::Parse,
     parse_macro_input,
     punctuated::{self, Punctuated},
-    DataEnum, DeriveInput, ExprClosure, LitStr, Pat, PatIdent, Token,
+    DataEnum, DeriveInput, ExprClosure, Ident, LitStr, Pat, PatIdent, Token,
 };
 
 #[proc_macro_derive(Nonterminal)]
@@ -46,7 +47,9 @@ pub fn nonterminal_derive_macro(input: proc_macro::TokenStream) -> proc_macro::T
     }
     .into()
 }
+
 #[proc_macro]
+#[proc_macro_error]
 pub fn grammar(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     grammar_impl(input)
 }
@@ -61,7 +64,7 @@ struct GrammarData {
     token_struct_ident: Ident,
     terminal_enum_ident: Ident,
     terminals: Vec<TerminalDecl>,
-    rules: Vec<RuleDecl>,
+    rules: Vec<RulesDecl>,
 }
 
 impl Parse for GrammarData {
@@ -99,8 +102,14 @@ fn parse_section(
         braced!(content in input);
         parse_terminals_section(grammar_data, &&content)?;
         Ok(true)
+    } else if lookahead.peek(kw::rules) {
+        input.parse::<kw::rules>()?;
+        let content;
+        braced!(content in input);
+        parse_rules_section(grammar_data, &&content)?;
+        Ok(true)
     } else {
-        panic!("unexpected token {:?}", input.span().source_text().unwrap());
+        Err(lookahead.error())
     }
 }
 
@@ -119,9 +128,11 @@ fn parse_rules_section(
     grammar_data: &mut GrammarData,
     input: &syn::parse::ParseStream,
 ) -> syn::Result<()> {
-    let rules = Punctuated::<RuleDecl, Token![;]>::parse_terminated(input)?;
+    let rules = Punctuated::<RulesDecl, Token![;]>::parse_terminated(input)?;
 
     grammar_data.rules = rules.into_iter().collect();
+
+    println!("{:?}", grammar_data.rules);
 
     Ok(())
 }
@@ -130,20 +141,77 @@ fn parse_rules_section(
 X = A B C;
 */
 
-struct RuleDecl {
-    ident: Ident,
+#[derive(Debug, PartialEq, Eq)]
+struct Rule {
+    symbols: Vec<Ident>,
 }
 
-impl Parse for RuleDecl {
+impl Rule {
+    pub fn is_epsilon(&self) -> bool {
+        self.symbols.is_empty()
+    }
+}
+
+struct ResolvedSymbol {
+    ident: Ident,
+    kind: ResolvedSymbolKind,
+}
+
+enum ResolvedSymbolKind {
+    Terminal,
+    Nonterminal,
+    Undeclared,
+}
+
+struct ResolvedRule {
+    symbols: Vec<ResolvedSymbol>,
+}
+
+#[derive(Debug)]
+struct RulesDecl {
+    ident: Ident,
+    rules: Vec<Rule>,
+}
+
+impl Parse for RulesDecl {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let rule_ident = input.parse::<Ident>()?;
         input.parse::<Token![=]>()?;
-        input.peek()
+
+        let mut rules = Vec::new();
+
+        let mut rule_symbols = Vec::new();
+
+        while !input.peek(Token![;]) {
+            if input.peek(Ident) {
+                let ident = input.parse::<Ident>()?;
+                rule_symbols.push(ident);
+            } else if input.peek(Token![|]) {
+                let pipe = input.parse::<Token![|]>()?;
+                rules.push(Rule {
+                    symbols: rule_symbols,
+                });
+                rule_symbols = Vec::new();
+            }
+        }
+
+        // add the rule
+        rules.push(Rule {
+            symbols: rule_symbols,
+        });
+
+        // parse the semicolon
+        input.parse::<Token![;]>()?;
+
+        Ok(RulesDecl {
+            ident: rule_ident,
+            rules,
+        })
     }
 }
 
 struct TerminalDecl {
-    ident: proc_macro2::Ident,
+    ident: Ident,
     colon: Token![:],
     kind: TerminalDeclKind,
 }
@@ -156,7 +224,6 @@ enum TerminalDeclKind {
 impl Parse for TerminalDecl {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident = input.parse::<proc_macro2::Ident>()?;
-        println!("{:?}", ident);
         let colon = input.parse::<Token![:]>()?;
         let lookahead = input.lookahead1();
         if lookahead.peek(LitStr) {
@@ -174,17 +241,61 @@ impl Parse for TerminalDecl {
                 kind: TerminalDeclKind::ParseFunction { closure },
             })
         } else {
-            unimplemented!("only literal string and closure terminal declarations supported");
+            Err(lookahead.error())
         }
     }
 }
 
 fn grammar_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let grammar_data: GrammarData = parse_macro_input!(input);
+    let mut grammar_data: GrammarData = parse_macro_input!(input);
 
-    let code = codegen(grammar_data).into();
-    println!("{:?}", code);
-    code
+    resolve(&mut grammar_data);
+
+    codegen(grammar_data).into()
+}
+
+fn resolve(grammar_data: &mut GrammarData) {
+    let nonterminal_idents: Vec<Ident> = grammar_data
+        .rules
+        .iter()
+        .map(|decl| decl.ident.clone())
+        .collect();
+    for nonterminal_ident in nonterminal_idents.iter() {
+        for terminal_ident in grammar_data.terminals.iter().map(|decl| &decl.ident) {
+            if terminal_ident != nonterminal_ident {
+                continue;
+            }
+            emit_error!(
+                nonterminal_ident.span(),
+                "a nonterminal cannot have the same name as a terminal"
+            );
+            emit_error!(
+                terminal_ident.span(),
+                "a nonterminal cannot have the same name as a terminal"
+            );
+        }
+    }
+
+    for rules_decl in grammar_data.rules.iter_mut() {
+        for rule in rules_decl.rules.iter_mut() {
+            for symbol in rule.symbols.iter_mut() {
+                let kind = {
+                    if grammar_data
+                        .terminals
+                        .iter_mut()
+                        .any(|decl| &decl.ident == symbol)
+                    {
+                        ResolvedSymbolKind::Terminal
+                    } else if nonterminal_idents.iter().any(|ident| ident == symbol) {
+                        ResolvedSymbolKind::Nonterminal
+                    } else {
+                        emit_error!(symbol.span(), "undeclared identifier");
+                        ResolvedSymbolKind::Undeclared
+                    }
+                };
+            }
+        }
+    }
 }
 
 /*
